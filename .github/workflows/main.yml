@@ -4,9 +4,9 @@ on:
   workflow_dispatch:
     inputs:
       task:
-        description: "Tâche à donner à Cline"
+        description: "Tâche à exécuter par Cline"
         required: true
-        default: "Analyse le projet, lance les tests, corrige les problèmes et vérifie que le build fonctionne."
+        default: "Analyse le problème actuel de tool calling dans src/server.ts. Corrige uniquement la cause réelle, teste le fonctionnement des outils, puis vérifie le build."
 
 permissions:
   contents: write
@@ -29,12 +29,12 @@ jobs:
       - name: Installer Cline
         run: npm install -g cline
 
-      - name: Configurer Cline avec OpenRouter
+      - name: Configurer Cline
         run: |
           cline auth \
             --provider openrouter \
             --apikey "${{ secrets.OPENROUTER_API_KEY }}" \
-           --modelid "openrouter/free"
+            --modelid "openrouter/free"
 
       - name: Donner la tâche à Cline
         env:
@@ -43,17 +43,38 @@ jobs:
           git config user.name "Cline Agent"
           git config user.email "cline-agent@users.noreply.github.com"
 
-          cline --yolo "$TASK"
+          cline --yolo "$TASK
 
-      - name: Vérifier et enregistrer les modifications
+          "
+
+      - name: Bloquer les modifications dangereuses
+        run: |
+          git restore -- .github/workflows || true
+
+          FORBIDDEN=$(git diff --name-only | grep '^.github/workflows/' || true)
+
+          if [ -n "$FORBIDDEN" ]; then
+            echo "Cline a tenté de modifier un workflow GitHub :"
+            echo "$FORBIDDEN"
+            exit 1
+          fi
+
+      - name: Vérifier le code
+        run: |
+          npx oxfmt --check package.json src/app.tsx src/server.ts
+          npx oxlint src/
+          npx tsc
+          npm run build
+
+      - name: Enregistrer les modifications
         run: |
           git status
           git diff --stat
 
           if [ -n "$(git status --porcelain)" ]; then
-            git add -A
+            git add src package.json package-lock.json
             git commit -m "Cline: automatic project update"
             git push
           else
-            echo "Aucune modification effectuée."
+            echo "Aucune modification utile effectuée."
           fi
