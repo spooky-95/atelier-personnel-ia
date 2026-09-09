@@ -10,7 +10,15 @@ import {
   tool
 } from "ai";
 import { z } from "zod";
-
+type WorkshopState = {
+  memory: string[];
+  projects: {
+    id: string;
+    name: string;
+    description: string;
+    status: "active" | "completed" | "blocked";
+  }[];
+};
 export class ChatAgent extends AIChatAgent<Env> {
 maxPersistedMessages = 100;
   chatRecovery = true;
