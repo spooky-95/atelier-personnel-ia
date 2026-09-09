@@ -34,7 +34,7 @@ jobs:
           cline auth \
             --provider openrouter \
             --apikey "${{ secrets.OPENROUTER_API_KEY }}" \
-            --modelid "z-ai/glm-5.2:free"
+           --modelid "openrouter/free"
 
       - name: Donner la tâche à Cline
         env:
