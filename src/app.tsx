@@ -75,6 +75,7 @@ function cleanAssistantText(text: string): string {
     .replace(/<\/?tool_call>/gi, "")
     .replace(/<arg_value>[\s\S]*?<\/arg_value>/gi, "")
     .replace(/<arg_value>[\s\S]*/gi, "")
+.replace(/tool_[\w-]+<\/arg_value>/gi, "")
     .trim();
 }
 function ThemeToggle() {
