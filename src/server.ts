@@ -61,7 +61,17 @@ maxPersistedMessages = 100;
   async onChatMessage(_onFinish: unknown, options?: OnChatMessageOptions) {
     const mcpTools = this.mcp.getAITools();
     const workshopTools = {
-  save_memory: tool({
+    get_memory: tool({
+    description:
+      "Récupère les informations actuellement enregistrées dans la mémoire persistante.",
+    inputSchema: z.object({}),
+    execute: async () => {
+      return {
+        memories: this.state.memory,
+      };
+    },
+  }),
+save_memory: tool({
     description:
       "Enregistre une information importante dans la mémoire persistante de l'utilisateur.",
     inputSchema: z.object({
