@@ -60,7 +60,54 @@ maxPersistedMessages = 100;
 
   async onChatMessage(_onFinish: unknown, options?: OnChatMessageOptions) {
     const mcpTools = this.mcp.getAITools();
-    const workersai = createWorkersAI({ binding: this.env.AI });
+    const workshopTools = {
+  save_memory: tool({
+    description:
+      "Enregistre une information importante dans la mémoire persistante de l'utilisateur.",
+    inputSchema: z.object({
+      content: z.string(),
+    }),
+    execute: async ({ content }) => {
+      this.setState({
+        ...this.state,
+        memory: [...this.state.memory, content],
+      });
+
+      return {
+        success: true,
+        message: "Information mémorisée.",
+      };
+    },
+  }),
+
+  save_project: tool({
+    description:
+      "Crée ou met à jour un projet dans la mémoire persistante.",
+    inputSchema: z.object({
+      id: z.string(),
+      name: z.string(),
+      description: z.string(),
+      status: z.enum(["active", "completed", "blocked"]),
+    }),
+    execute: async ({ id, name, description, status }) => {
+      const projects = this.state.projects.filter((p) => p.id !== id);
+
+      this.setState({
+        ...this.state,
+        projects: [
+          ...projects,
+          { id, name, description, status },
+        ],
+      });
+
+      return {
+        success: true,
+        message: `Projet "${name}" enregistré.`,
+      };
+    },
+  }),
+};
+const workersai = createWorkersAI({ binding: this.env.AI });
 
     const result = streamText({
       model: workersai("@cf/zai-org/glm-4.7-flash", {
@@ -117,6 +164,7 @@ If the user asks to schedule a task, use the schedule tool to schedule the task.
       tools: {
         // MCP tools from connected servers
         ...mcpTools,
+...workshopTools,
 
         // Server-side tool: runs automatically on the server
         getWeather: tool({
