@@ -68,7 +68,15 @@ function fileToDataUri(file: File): Promise<string> {
 }
 
 // ── Small components ──────────────────────────────────────────────────
-
+function cleanAssistantText(text: string): string {
+  return text
+    .replace(/<tool_call>[\s\S]*?<\/tool_call>/gi, "")
+    .replace(/<tool_call>[\s\S]*/gi, "")
+    .replace(/<\/?tool_call>/gi, "")
+    .replace(/<arg_value>[\s\S]*?<\/arg_value>/gi, "")
+    .replace(/<arg_value>[\s\S]*/gi, "")
+    .trim();
+}
 function ThemeToggle() {
   const [dark, setDark] = useState(
     () => document.documentElement.getAttribute("data-mode") === "dark"
@@ -808,13 +816,17 @@ function Chat() {
                   }
 
                   if (part.type === "text") {
-                    if (!part.text) return null;
+  const cleanText = isUser
+    ? part.text
+    : cleanAssistantText(part.text);
 
-                    if (isUser) {
-                      return (
+  if (!cleanText) return null;
+
+  if (isUser) {
+    return (
                         <div key={key} className="flex justify-end">
                           <div className="max-w-[85%] px-4 py-2.5 rounded-2xl rounded-br-md bg-kumo-contrast text-kumo-inverse leading-relaxed">
-                            {part.text}
+                            {cleanText}
                           </div>
                         </div>
                       );
@@ -829,7 +841,7 @@ function Chat() {
                             controls={false}
                             isAnimating={isLastAssistant && isStreaming}
                           >
-                            {part.text}
+                            {cleanText}
                           </Streamdown>
                         </div>
                       </div>
