@@ -1,7 +1,7 @@
-import { createOpenAI } from "@ai-sdk/openai";
 import { callable, routeAgentRequest, type Schedule } from "agents";
 import { getSchedulePrompt, scheduleSchema } from "agents/schedule";
 import { AIChatAgent, type OnChatMessageOptions } from "@cloudflare/ai-chat";
+import { createWorkersAI } from "workers-ai-provider";
 import {
   convertToModelMessages,
   pruneMessages,
@@ -82,29 +82,13 @@ export class ChatAgent extends AIChatAgent<Env> {
   ) {
     const mcpTools = this.mcp.getAITools();
 
-    /*
-     * ============================================================
-     * OUTILS INTERNES DE L'ATELIER
-     * ============================================================
-     *
-     * Ces outils sont volontairement séparés des outils MCP.
-     *
-     * get_memory    -> mémoire textuelle uniquement
-     * save_memory   -> mémoire textuelle uniquement
-     * get_projects  -> projets internes uniquement
-     * save_project  -> projets internes uniquement
-     * list_mcp_servers -> serveurs MCP uniquement
-     */
-
     const workshopTools = {
       get_memory: tool({
         description:
-          "SOURCE DE VÉRITÉ : mémoire interne de l'utilisateur uniquement. " +
-          "Utilise CET OUTIL lorsque l'utilisateur demande ce qui est mémorisé, " +
-          "ses souvenirs, ses préférences ou une information précédemment enregistrée. " +
-          "NE PAS utiliser cet outil pour consulter les projets. " +
-          "NE PAS utiliser cet outil pour consulter MCP. " +
-          "Retourne les données persistantes exactes sans les modifier.",
+          "SOURCE DE VÉRITÉ : mémoire interne persistante uniquement. " +
+          "Utilise cet outil lorsque l'utilisateur demande ce qui est mémorisé, " +
+          "ses souvenirs ou une information précédemment enregistrée. " +
+          "Ne pas utiliser cet outil pour consulter les projets.",
         inputSchema: z.object({}),
         execute: async () => {
           return {
@@ -116,10 +100,9 @@ export class ChatAgent extends AIChatAgent<Env> {
 
       save_memory: tool({
         description:
-          "ÉCRIT dans la mémoire interne persistante. " +
-          "Utilise CET OUTIL uniquement lorsque l'utilisateur demande explicitement " +
-          "de mémoriser ou d'enregistrer une information. " +
-          "NE PAS utiliser pour créer ou modifier un projet.",
+          "Écrit dans la mémoire interne persistante. " +
+          "Utilise cet outil uniquement lorsque l'utilisateur demande explicitement " +
+          "de mémoriser ou d'enregistrer une information.",
         inputSchema: z.object({
           content: z.string().min(1),
         }),
@@ -149,12 +132,10 @@ export class ChatAgent extends AIChatAgent<Env> {
       get_projects: tool({
         description:
           "SOURCE DE VÉRITÉ : projets internes uniquement. " +
-          "Utilise OBLIGATOIREMENT CET OUTIL lorsque l'utilisateur demande " +
+          "Utilise obligatoirement cet outil lorsque l'utilisateur demande " +
           "la liste de ses projets, le nom d'un projet, sa description ou son statut. " +
-          "NE PAS utiliser get_memory pour consulter les projets. " +
-          "NE PAS utiliser un outil MCP pour consulter les projets internes. " +
-          "Retourne les projets persistants tels qu'ils sont stockés, sans traduire " +
-          "ou modifier les valeurs.",
+          "Ne pas utiliser get_memory pour consulter les projets. " +
+          "Ne pas utiliser un outil MCP pour consulter les projets internes.",
         inputSchema: z.object({}),
         execute: async () => {
           return {
@@ -166,11 +147,8 @@ export class ChatAgent extends AIChatAgent<Env> {
 
       save_project: tool({
         description:
-          "ÉCRIT dans les projets internes persistants. " +
-          "Utilise CET OUTIL pour créer ou modifier un projet interne. " +
-          "NE PAS utiliser pour une ressource provenant d'un serveur MCP. " +
-          "Le champ status doit rester exactement l'une de ces valeurs : " +
-          "active, completed ou blocked.",
+          "Écrit dans les projets internes persistants. " +
+          "Utilise cet outil pour créer ou modifier un projet interne.",
         inputSchema: z.object({
           id: z.string().min(1),
           name: z.string().min(1),
@@ -223,8 +201,7 @@ export class ChatAgent extends AIChatAgent<Env> {
       list_mcp_servers: tool({
         description:
           "SOURCE DE VÉRITÉ : connexions MCP externes uniquement. " +
-          "Utilise cet outil pour connaître les serveurs MCP connectés et leur état. " +
-          "NE PAS utiliser pour consulter les projets internes ou la mémoire interne.",
+          "Utilise cet outil pour connaître les serveurs MCP connectés et leur état.",
         inputSchema: z.object({}),
         execute: async () => {
           const state = this.getMcpServers();
@@ -245,24 +222,13 @@ export class ChatAgent extends AIChatAgent<Env> {
 
     /*
      * ============================================================
-     * OPENROUTER / GLM 5.2 FREE
+     * CLOUDFLARE WORKERS AI
      * ============================================================
      */
 
-    const openrouter = createOpenAI({
-      apiKey: this.env.OPENROUTER_API_KEY,
-      baseURL: "https://openrouter.ai/api/v1",
-      headers: {
-        "X-Title": "Atelier personnel IA",
-      },
+    const workersai = createWorkersAI({
+      binding: this.env.AI,
     });
-
-    /*
-     * Contexte minimal des projets actifs.
-     *
-     * Ce contexte aide l'orchestrateur à savoir qu'il existe des projets,
-     * mais get_projects reste la source de vérité pour leurs données complètes.
-     */
 
     const activeProjects =
       this.state.projects
@@ -278,17 +244,14 @@ export class ChatAgent extends AIChatAgent<Env> {
       "Aucun projet actif enregistré.";
 
     const result = streamText({
-      /*
-       * .chat() force l'utilisation de Chat Completions,
-       * compatible avec l'API OpenRouter.
-       */
-      model: openrouter.chat("z-ai/glm-5.2:free"),
+      model: workersai("@cf/zai-org/glm-4.7-flash", {
+        sessionAffinity: this.sessionAffinity,
+      }),
 
       system: `Tu es l'ORCHESTRATEUR PERSONNEL de l'utilisateur.
 
 TON RÔLE :
 
-Tu n'es pas simplement un chatbot.
 Tu es le chef de projet technique de l'Atelier personnel IA.
 
 Ton objectif est de comprendre une demande, déterminer ce qui doit être fait,
@@ -307,85 +270,38 @@ RÈGLES ABSOLUES :
 9. Vérifie le résultat lorsque cela est possible.
 10. Pose une seule question uniquement lorsqu'une information indispensable manque.
 
-RÈGLE CRITIQUE SUR LES OUTILS :
-
 MÉMOIRE :
-- "Qu'est-ce qui est mémorisé ?"
-- "Que sais-tu de ma mémoire ?"
-- "Mémorise ceci..."
-=> utiliser get_memory ou save_memory.
-
-PROJETS :
-- "Quels sont mes projets ?"
-- "Liste mes projets."
-- "Quel est mon projet X ?"
-- "Crée un projet."
-- "Modifie un projet."
-=> utiliser get_projects ou save_project.
-
-MCP :
-- "Quels serveurs MCP sont connectés ?"
-- "Quels outils externes sont disponibles ?"
-=> utiliser list_mcp_servers ou les outils MCP concernés.
-
-INTERDICTION :
-
-Ne jamais utiliser get_memory pour répondre à une question concernant les projets.
-
-Ne jamais utiliser get_projects pour répondre à une question concernant
-la mémoire.
-
-Ne jamais utiliser un outil MCP pour remplacer get_projects ou get_memory.
-
-Si l'utilisateur demande explicitement un outil précis, respecte sa demande
-et utilise cet outil si celui-ci est disponible.
-
-LECTURE DES DONNÉES :
-
-Lorsque get_memory est utilisé :
-- considère uniquement son champ memories comme mémoire interne ;
-- ne transforme pas un projet en souvenir.
-
-Lorsque get_projects est utilisé :
-- considère uniquement son champ projects comme liste des projets internes ;
-- conserve exactement les valeurs id, name, description et status ;
-- ne traduis pas les valeurs status ;
-- ne remplace pas "active" par "en cours" ;
-- ne remplace pas "completed" par "terminé" ;
-- ne remplace pas "blocked" par "bloqué" dans les données brutes.
-
-Lorsque list_mcp_servers est utilisé :
-- considère uniquement son champ servers comme liste des serveurs MCP ;
-- ne les considère jamais comme des projets internes.
-
-MÉMOIRE PERSISTANTE :
 
 Si l'utilisateur demande explicitement de mémoriser une information :
 1. appelle save_memory ;
 2. vérifie que success=true ;
 3. seulement ensuite confirme la mémorisation.
 
-Si save_memory échoue :
-- ne dis PAS que l'information est mémorisée.
+Si save_memory échoue, ne dis jamais que l'information est mémorisée.
 
-PROJETS PERSISTANTS :
+Si l'utilisateur demande ce qui est mémorisé :
+- utilise obligatoirement get_memory ;
+- utilise uniquement les données retournées par cet outil.
+
+PROJETS :
+
+Si l'utilisateur demande :
+- quels sont ses projets ;
+- la liste de ses projets ;
+- le nom d'un projet ;
+- la description d'un projet ;
+- le statut d'un projet ;
+
+utilise obligatoirement get_projects.
 
 Pour créer ou modifier un projet :
 1. utilise save_project ;
 2. vérifie success=true ;
 3. confirme uniquement après réussite.
 
-Pour consulter les projets :
-1. utilise get_projects ;
-2. utilise uniquement les données retournées par l'outil.
+Ne jamais utiliser get_memory pour répondre à une question sur les projets.
 
-CONTEXTE ACTUEL DES PROJETS ACTIFS :
-
-${activeProjects}
-
-IMPORTANT :
-Ce contexte est uniquement un aperçu.
-Pour obtenir la liste exacte des projets, utilise get_projects.
+Ne jamais utiliser un outil MCP pour remplacer get_projects.
 
 MCP :
 
@@ -395,6 +311,13 @@ Lorsqu'un outil MCP permet réellement d'effectuer une action :
 - utilise-le ;
 - attends son résultat ;
 - ne prétends pas que l'action est terminée avant d'avoir reçu un résultat positif.
+
+CONTEXTE ACTUEL DES PROJETS ACTIFS :
+
+${activeProjects}
+
+Ce contexte est uniquement un aperçu.
+Pour obtenir les données exactes des projets, utilise get_projects.
 
 FORMAT POUR LES PROJETS COMPLEXES :
 
@@ -431,8 +354,7 @@ Si l'utilisateur demande de programmer une tâche, utilise l'outil de planificat
         ...workshopTools,
 
         getWeather: tool({
-          description:
-            "Get the current weather for a city.",
+          description: "Get the current weather for a city.",
           inputSchema: z.object({
             city: z.string(),
           }),
@@ -481,6 +403,7 @@ Si l'utilisateur demande de programmer une tâche, utilise l'outil de planificat
               "%",
             ]),
           }),
+
           needsApproval: async ({ a, b }) =>
             Math.abs(a) > 1000 ||
             Math.abs(b) > 1000,
@@ -523,9 +446,7 @@ Si l'utilisateur demande de programmer une tâche, utilise l'outil de planificat
             when,
             description,
           }) => {
-            if (
-              when.type === "no-schedule"
-            ) {
+            if (when.type === "no-schedule") {
               return "Not a valid schedule input";
             }
 
@@ -589,13 +510,6 @@ Si l'utilisateur demande de programmer une tâche, utilise l'outil de planificat
         }),
       },
 
-      /*
-       * 12 étapes maximum par réponse.
-       *
-       * Cela laisse suffisamment de marge pour :
-       * réflexion → outil → résultat → vérification → correction
-       * tout en évitant de laisser GLM consommer inutilement le quota gratuit.
-       */
       stopWhen: stepCountIs(12),
 
       abortSignal: options?.abortSignal,
@@ -618,8 +532,7 @@ Si l'utilisateur demande de programmer une tâche, utilise l'outil de planificat
       JSON.stringify({
         type: "scheduled-task",
         description,
-        timestamp:
-          new Date().toISOString(),
+        timestamp: new Date().toISOString(),
       }),
     );
   }
@@ -631,10 +544,7 @@ export default {
     env: Env,
   ) {
     return (
-      (await routeAgentRequest(
-        request,
-        env,
-      )) ||
+      (await routeAgentRequest(request, env)) ||
       new Response("Not found", {
         status: 404,
       })
