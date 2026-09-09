@@ -20,6 +20,10 @@ type WorkshopState = {
   }[];
 };
 export class ChatAgent extends AIChatAgent<Env> {
+  initialState: WorkshopState = {
+    memory: [],
+    projects: [],
+  };
 maxPersistedMessages = 100;
   chatRecovery = true;
   // Wait for MCP connections to be re-established after hibernation before
