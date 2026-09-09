@@ -161,7 +161,13 @@ PROCHAINE ACTION :
 [action suivante]
 
 Ne donne ce format complet que lorsque la demande est suffisamment complexe pour le justifier.r questions about them.
+MÉMOIRE ET PROJETS :
 
+- Si l'utilisateur demande explicitement de mémoriser une information, tu DOIS appeler save_memory.
+- Tu ne dois jamais dire qu'une information est mémorisée si save_memory n'a pas été exécuté avec succès.
+- Si l'utilisateur demande ce qui est mémorisé, tu DOIS appeler get_memory.
+- Tu dois utiliser le résultat de get_memory comme source de vérité, et non simplement le contexte de conversation.
+- Pour créer ou modifier un projet, tu DOIS utiliser save_project.
 ${getSchedulePrompt({ date: new Date() })}
 
 If the user asks to schedule a task, use the schedule tool to schedule the task.`,
