@@ -1,0 +1,59 @@
+name: Atelier IA - Agent Cline
+
+on:
+  workflow_dispatch:
+    inputs:
+      task:
+        description: "Tâche à donner à Cline"
+        required: true
+        default: "Analyse le projet, lance les tests, corrige les problèmes et vérifie que le build fonctionne."
+
+permissions:
+  contents: write
+
+jobs:
+  cline:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Récupérer le projet
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Installer Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Installer Cline
+        run: npm install -g cline
+
+      - name: Configurer Cline avec OpenRouter
+        run: |
+          cline auth \
+            --provider openrouter \
+            --apikey "${{ secrets.OPENROUTER_API_KEY }}" \
+            --modelid "z-ai/glm-5.2:free"
+
+      - name: Donner la tâche à Cline
+        env:
+          TASK: ${{ inputs.task }}
+        run: |
+          git config user.name "Cline Agent"
+          git config user.email "cline-agent@users.noreply.github.com"
+
+          cline --yolo "$TASK"
+
+      - name: Vérifier et enregistrer les modifications
+        run: |
+          git status
+          git diff --stat
+
+          if [ -n "$(git status --porcelain)" ]; then
+            git add -A
+            git commit -m "Cline: automatic project update"
+            git push
+          else
+            echo "Aucune modification effectuée."
+          fi
