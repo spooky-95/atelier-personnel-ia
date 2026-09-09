@@ -1,7 +1,14 @@
 {
   "name": "agent-starter",
+  "version": "1.0.0",
   "private": true,
-  "version": "0.0.0",
+  "description": "Starter template for building AI chat agents on Cloudflare",
+  "keywords": [
+    "agents",
+    "ai",
+    "cloudflare"
+  ],
+  "license": "MIT",
   "type": "module",
   "scripts": {
     "dev": "vite dev",
@@ -26,13 +33,26 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
-    "@cloudflare/vite-plugin": "^1.13.8",
-    "@cloudflare/workers-types": "^4.20260616.0",
-    "@vitejs/plugin-react": "^4.4.1",
-    "oxfmt": "^0.10.0",
-    "oxlint": "^0.16.0",
-    "typescript": "^5.8.3",
-    "vite": "^6.3.5",
-    "wrangler": "^4.20.0"
+    "@babel/plugin-proposal-decorators": "^8.0.2",
+    "@cloudflare/vite-plugin": "^1.46.0",
+    "@rolldown/plugin-babel": "^0.2.3",
+    "@tailwindcss/vite": "^4.3.1",
+    "@types/node": "^26.0.1",
+    "@types/react": "^19.2.17",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^6.0.3",
+    "oxfmt": "^0.56.0",
+    "oxlint": "^1.71.0",
+    "tailwindcss": "^4.3.1",
+    "typescript": "^6.0.3",
+    "vite": "^8.1.0",
+    "wrangler": "^4.113.0"
+  },
+  "allowScripts": {
+    "core-js-pure@3.49.0": true,
+    "esbuild@0.28.1": true,
+    "workerd@1.20260721.1": true,
+    "sharp@0.34.5": true,
+    "fsevents@2.3.3": true
   }
 }
